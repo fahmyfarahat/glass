@@ -29,6 +29,18 @@ const PROVIDERS = {
       ],
   },
 
+  'ionos': {
+      name: 'IONOS AI Model Hub',
+      handler: () => require('./providers/compatible'),
+      llmModels: [{ id: 'ionos::configured', name: 'IONOS (configured model)' }],
+      sttModels: [],
+  },
+  'custom': {
+      name: 'Custom OpenAI-compatible',
+      handler: () => require('./providers/compatible'),
+      llmModels: [{ id: 'custom::configured', name: 'Custom (configured model)' }],
+      sttModels: [],
+  },
   'openai-glass': {
       name: 'OpenAI (Glass)',
       handler: () => require("./providers/openai"),
@@ -100,40 +112,40 @@ function sanitizeModelId(model) {
 }
 
 function createSTT(provider, opts) {
-  if (provider === 'openai-glass') provider = 'openai';
+  if (provider === 'openai-glass') {
+    provider = 'openai';
+    opts = { ...opts, model: sanitizeModelId(opts?.model) };
+  }
   
   const handler = PROVIDERS[provider]?.handler();
   if (!handler?.createSTT) {
       throw new Error(`STT not supported for provider: ${provider}`);
   }
-  if (opts && opts.model) {
-    opts = { ...opts, model: sanitizeModelId(opts.model) };
-  }
   return handler.createSTT(opts);
 }
 
 function createLLM(provider, opts) {
-  if (provider === 'openai-glass') provider = 'openai';
+  if (provider === 'openai-glass') {
+    provider = 'openai';
+    opts = { ...opts, model: sanitizeModelId(opts?.model) };
+  }
 
   const handler = PROVIDERS[provider]?.handler();
   if (!handler?.createLLM) {
       throw new Error(`LLM not supported for provider: ${provider}`);
   }
-  if (opts && opts.model) {
-    opts = { ...opts, model: sanitizeModelId(opts.model) };
-  }
   return handler.createLLM(opts);
 }
 
 function createStreamingLLM(provider, opts) {
-  if (provider === 'openai-glass') provider = 'openai';
+  if (provider === 'openai-glass') {
+    provider = 'openai';
+    opts = { ...opts, model: sanitizeModelId(opts?.model) };
+  }
   
   const handler = PROVIDERS[provider]?.handler();
   if (!handler?.createStreamingLLM) {
       throw new Error(`Streaming LLM not supported for provider: ${provider}`);
-  }
-  if (opts && opts.model) {
-    opts = { ...opts, model: sanitizeModelId(opts.model) };
   }
   return handler.createStreamingLLM(opts);
 }

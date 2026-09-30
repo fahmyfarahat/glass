@@ -5,6 +5,7 @@ const authService = require('../common/services/authService');
 const sessionRepository = require('../common/repositories/session');
 const sttRepository = require('./stt/repositories');
 const internalBridge = require('../../bridge/internalBridge');
+const meetingAssist = require('./meetingAssistService');
 
 class ListenService {
     constructor() {
@@ -63,7 +64,7 @@ class ListenService {
                 case 'Listen':
                     console.log('[ListenService] changeSession to "Listen"');
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
-                    await this.initializeSession();
+                    if (!await this.initializeSession()) throw new Error('Could not start listening. Check the speech provider and permissions.');
                     if (listenWindow && !listenWindow.isDestroyed()) {
                         listenWindow.webContents.send('session-state-changed', { isActive: true });
                     }
@@ -99,6 +100,9 @@ class ListenService {
     async handleTranscriptionComplete(speaker, text) {
         console.log(`[ListenService] Transcription complete: ${speaker} - ${text}`);
         
+        if (!this.currentSessionId || !this.sttService.isSessionActive()) return;
+        meetingAssist.controller.addTurn(speaker, text);
+
         // Save to database
         await this.saveConversationTurn(speaker, text);
         
@@ -160,6 +164,7 @@ class ListenService {
             return false;
         }
 
+        const lifecycle = this.lifecycle || 0;
         this.isInitializingSession = true;
         this.sendToRenderer('session-initializing', true);
         this.sendToRenderer('update-status', 'Initializing sessions...');
@@ -172,11 +177,12 @@ class ListenService {
             }
 
             /* ---------- STT Initialization Retry Logic ---------- */
-            const MAX_RETRY = 10;
+            const MAX_RETRY = 2;
             const RETRY_DELAY_MS = 300;   // 0.3 seconds
 
             let sttReady = false;
             for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+                if (lifecycle !== (this.lifecycle || 0)) throw new Error('Listening was stopped.');
                 try {
                     await this.sttService.initializeSttSessions(language);
                     sttReady = true;
@@ -190,22 +196,25 @@ class ListenService {
                     }
                 }
             }
+            if (lifecycle !== (this.lifecycle || 0)) throw new Error('Listening was stopped.');
             if (!sttReady) throw new Error('STT init failed after retries');
             /* ------------------------------------------- */
 
             console.log('✅ Listen service initialized successfully.');
             
             this.sendToRenderer('update-status', 'Connected. Ready to listen.');
+            meetingAssist.start();
+            this.sendToRenderer('change-listen-capture-state', { status: 'start' });
             
             return true;
         } catch (error) {
             console.error('❌ Failed to initialize listen service:', error);
-            this.sendToRenderer('update-status', 'Initialization failed.');
+            await this.closeSession();
+            this.sendToRenderer('update-status', `Initialization failed: ${error.message}`);
             return false;
         } finally {
             this.isInitializingSession = false;
             this.sendToRenderer('session-initializing', false);
-            this.sendToRenderer('change-listen-capture-state', { status: "start" });
         }
     }
 
@@ -229,6 +238,8 @@ class ListenService {
     }
 
     async closeSession() {
+        this.lifecycle = (this.lifecycle || 0) + 1;
+        meetingAssist.stop();
         try {
             this.sendToRenderer('change-listen-capture-state', { status: "stop" });
             // Close STT sessions

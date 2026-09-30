@@ -1,15 +1,15 @@
 # electron-builder.yml
 
 # The unique application ID
-appId: com.pickle.glass
+appId: com.fahmyfarahat.glass.meeting
 
 # The user-facing application name
-productName: Glass
+productName: Glass Meeting Assistant
 
 # Publish configuration for GitHub releases
 publish:
     provider: github
-    owner: pickle-com
+    owner: fahmyfarahat
     repo: glass
     releaseType: draft
 
@@ -17,13 +17,13 @@ publish:
 protocols:
     name: PickleGlass Protocol
     schemes: 
-        - pickleglass
+        - glass-meeting
 
 # List of files to be included in the app package
 files:
     - src/**/*
     - package.json
-    - pickleglass_web/backend_node/**/*
+    - glass-meeting_web/backend_node/**/*
     - '!**/node_modules/electron/**'
     - public/build/**/*
 
@@ -75,6 +75,6 @@ mac:
     entitlementsInherit: entitlements.plist
     target:
       - target: dmg
-        arch: universal
+        arch: arm64
       - target: zip
-        arch: universal
+        arch: arm64

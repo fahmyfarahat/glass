@@ -1,8 +1,8 @@
 {
-    "name": "pickle-glass",
-    "productName": "Glass",
+    "name": "glass-meeting-assistant",
+    "productName": "Glass Meeting Assistant",
     "version": "0.2.4",
-    "description": "Cl*ely for Free",
+    "description": "Live meeting assistance with OpenAI and IONOS AI Model Hub",
     "main": "src/index.js",
     "scripts": {
         "setup": "npm install && cd pickleglass_web && npm install && npm run build && cd .. && npm start",
@@ -17,7 +17,9 @@
         "build:renderer": "node build.js",
         "build:web": "cd pickleglass_web && npm run build && cd ..",
         "build:all": "npm run build:renderer && npm run build:web",
-        "watch:renderer": "node build.js --watch"
+        "watch:renderer": "node build.js --watch",
+        "test": "node --test tests/*.test.js",
+        "build:mac:local": "node scripts/build-mac-local.js"
     },
     "keywords": [
         "glass",

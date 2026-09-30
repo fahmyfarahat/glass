@@ -2,6 +2,18 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  meetingAssist: {
+    getState: () => ipcRenderer.invoke('meeting-assist:get-state'),
+    configure: options => ipcRenderer.invoke('meeting-assist:configure', options),
+    sources: () => ipcRenderer.invoke('meeting-assist:sources'),
+    suggest: () => ipcRenderer.invoke('meeting-assist:suggest'),
+    onState: callback => ipcRenderer.on('meeting-assist:state', callback),
+    removeOnState: callback => ipcRenderer.removeListener('meeting-assist:state', callback),
+  },
+  providers: {
+    configure: options => ipcRenderer.invoke('model:configure-provider', options),
+    listModels: options => ipcRenderer.invoke('model:list-provider-models', options),
+  },
   // Platform information for renderer processes
   platform: {
     isLinux: process.platform === 'linux',

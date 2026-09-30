@@ -188,28 +188,15 @@ export class WelcomeHeader extends LitElement {
             <div class="container">
                 <button class="close-button" @click=${this.handleClose}>×</button>
                 <div class="header-section">
-                    <div class="title">Welcome to Glass</div>
+                    <div class="title">Glass Meeting Assistant</div>
                     <div class="subtitle">Choose how to connect your AI model</div>
-                </div>
-                <div class="option-card">
-                    <div class="divider"></div>
-                    <div class="option-content">
-                        <div class="option-title">Quick start with default API key</div>
-                        <div class="option-description">
-                            100% free with Pickle's OpenAI key<br/>No personal data collected<br/>Sign up with Google in seconds
-                        </div>
-                    </div>
-                    <button class="action-button" @click=${this.loginCallback}>
-                        <div class="button-text">Open Browser to Log in</div>
-                        <div class="button-icon"><div class="arrow-icon"></div></div>
-                    </button>
                 </div>
                 <div class="option-card">
                     <div class="divider"></div>
                     <div class="option-content">
                         <div class="option-title">Use Personal API keys</div>
                         <div class="option-description">
-                            Costs may apply based on your API usage<br/>No personal data collected<br/>Use your own API keys (OpenAI, Gemini, etc.)
+                            OpenAI, IONOS AI Model Hub, or a custom endpoint.<br/>Choose separate providers for answers and transcription.
                         </div>
                     </div>
                     <button class="action-button" @click=${this.apiKeyCallback}>
@@ -218,8 +205,7 @@ export class WelcomeHeader extends LitElement {
                     </button>
                 </div>
                 <div class="footer">
-                    Glass does not collect your personal data —
-                    <span class="footer-link" @click=${this.openPrivacyPolicy}>See details</span>
+                    Your selected providers process meeting context.<br/>API usage is billed by those providers.
                 </div>
             </div>
         `;

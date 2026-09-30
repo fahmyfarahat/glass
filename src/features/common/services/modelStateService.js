@@ -14,6 +14,42 @@ class ModelStateService extends EventEmitter {
         this.store = new Store({ name: 'pickle-glass-model-state' });
     }
 
+    async getConnectionOptions(provider, setting) {
+        const record = setting || await providerSettingsRepository.getByProvider(provider);
+        const saved = record?.connection_options ? JSON.parse(record.connection_options) : {};
+        return { baseURL: provider === 'ionos' ? require('../ai/providers/compatible').IONOS_BASE_URL : '', ...saved };
+    }
+
+    async configureProvider(provider, options) {
+        if (!['ionos', 'custom'].includes(provider)) return { success: false, error: 'Unsupported configurable provider.' };
+        try {
+            const compatible = require('../ai/providers/compatible');
+            const previous = await this.getConnectionOptions(provider);
+            const existing = await providerSettingsRepository.getByProvider(provider) || {};
+            const baseURL = compatible.normalizeBaseURL(options.baseURL);
+            const apiKey = options.key?.trim() || (baseURL === previous.baseURL ? existing.api_key : '');
+            const validated = compatible.validateOptions({ baseURL, apiKey, model: options.model });
+            // Validate the selected model, including endpoints without GET /models.
+            await compatible.testConnection(validated);
+            // Commit the endpoint and its encrypted credential in the same row.
+            // A failed save must never pair an old key with a new endpoint.
+            const connection_options = JSON.stringify({ baseURL, model: validated.model, supportsVision: options.supportsVision === true });
+            await providerSettingsRepository.upsert(provider, { ...existing, api_key: validated.apiKey, connection_options });
+            await this.setSelectedModel('llm', `${provider}::configured`);
+            return { success: true };
+        } catch (error) { return { success: false, error: error.message }; }
+    }
+
+    async listProviderModels(provider, options) {
+        if (!['ionos', 'custom'].includes(provider)) throw new Error('Unsupported provider.');
+        const previous = await this.getConnectionOptions(provider);
+        const baseURL = require('../ai/providers/compatible').normalizeBaseURL(options.baseURL);
+        const existing = await providerSettingsRepository.getByProvider(provider);
+        const apiKey = options.key?.trim() || (baseURL === previous.baseURL ? existing?.api_key : '');
+        if (!apiKey) throw new Error('Enter a key for this endpoint.');
+        return require('../ai/providers/compatible').listModels({ baseURL, apiKey });
+    }
+
     async initialize() {
         console.log('[ModelStateService] Initializing one-time setup...');
         await this._initializeEncryption();
@@ -115,7 +151,7 @@ class ModelStateService extends EventEmitter {
         const apiKeys = {};
         Object.keys(PROVIDERS).forEach(provider => {
             const setting = providerSettings.find(s => s.provider === provider);
-            apiKeys[provider] = setting?.api_key || null;
+            apiKeys[provider] = ['ionos', 'custom'].includes(provider) ? (setting?.api_key ? 'configured' : null) : setting?.api_key || null;
         });
 
         const activeSettings = await providerSettingsRepository.getActiveSettings();
@@ -206,9 +242,11 @@ class ModelStateService extends EventEmitter {
 
     async setApiKey(provider, key) {
         console.log(`[ModelStateService] setApiKey for ${provider}`);
-        if (!provider) {
-            throw new Error('Provider is required');
+        if (!PROVIDERS[provider]) {
+            throw new Error('A supported provider is required');
         }
+
+        if (['ionos', 'custom'].includes(provider)) return { success: false, error: 'Use Save and test in the endpoint settings.' };
 
         // 'openai-glass'는 자체 인증 키를 사용하므로 유효성 검사를 건너뜁니다.
         if (provider !== 'openai-glass') {
@@ -236,7 +274,7 @@ class ModelStateService extends EventEmitter {
         const apiKeys = {};
         allSettings.forEach(s => {
             if (s.provider !== 'openai-glass') {
-                apiKeys[s.provider] = s.api_key;
+                apiKeys[s.provider] = ['ionos', 'custom'].includes(s.provider) ? (s.api_key ? 'configured' : '') : s.api_key;
             }
         });
         return apiKeys;
@@ -345,6 +383,8 @@ class ModelStateService extends EventEmitter {
             if (providerId === 'ollama' && type === 'llm') {
                 const installed = ollamaModelRepository.getInstalledModels();
                 available.push(...installed.map(m => ({ id: m.name, name: m.name })));
+            } else if (['ionos', 'custom'].includes(providerId) && type === 'llm') {
+                available.push({ id: `${providerId}::configured`, name: `${PROVIDERS[providerId].name}: ${(await this.getConnectionOptions(providerId, setting)).model || 'configure model'}` });
             } else if (PROVIDERS[providerId]?.[modelListKey]) {
                 available.push(...PROVIDERS[providerId][modelListKey]);
             }
@@ -358,11 +398,13 @@ class ModelStateService extends EventEmitter {
         
         const model = type === 'llm' ? activeSetting.selected_llm_model : activeSetting.selected_stt_model;
         if (!model) return null;
+        const connection = ['ionos', 'custom'].includes(activeSetting.provider) ? await this.getConnectionOptions(activeSetting.provider, activeSetting) : {};
 
         return {
             provider: activeSetting.provider,
-            model: model,
+            model,
             apiKey: activeSetting.api_key,
+            ...connection,
         };
     }
 
@@ -383,11 +425,11 @@ class ModelStateService extends EventEmitter {
         }
     }
 
-    getProviderConfig() {
+    async getProviderConfig() {
         const config = {};
         for (const key in PROVIDERS) {
             const { handler, ...rest } = PROVIDERS[key];
-            config[key] = rest;
+            config[key] = { ...rest, ...(['ionos', 'custom'].includes(key) ? { connection: await this.getConnectionOptions(key) } : {}) };
         }
         return config;
     }

@@ -1,8 +1,4 @@
 const OpenAI = require('openai');
-const WebSocket = require('ws');
-const { Portkey } = require('portkey-ai');
-const { Readable } = require('stream');
-const { getProviderForModel } = require('../factory.js');
 
 
 class OpenAIProvider {
@@ -13,7 +9,7 @@ class OpenAIProvider {
 
         try {
             const response = await fetch('https://api.openai.com/v1/models', {
-                headers: { 'Authorization': `Bearer ${key}` }
+                headers: { 'Authorization': `Bearer ${key}` }, signal: AbortSignal.timeout(15000)
             });
 
             if (response.ok) {
@@ -41,116 +37,15 @@ class OpenAIProvider {
  * @param {string} [opts.portkeyVirtualKey] - Portkey virtual key
  * @returns {Promise<object>} STT session
  */
-async function createSTT({ apiKey, language = 'en', callbacks = {}, usePortkey = false, portkeyVirtualKey, ...config }) {
-  const keyType = usePortkey ? 'vKey' : 'apiKey';
-  const key = usePortkey ? (portkeyVirtualKey || apiKey) : apiKey;
-
-  const wsUrl = keyType === 'apiKey'
-    ? 'wss://api.openai.com/v1/realtime?intent=transcription'
-    : 'wss://api.portkey.ai/v1/realtime?intent=transcription';
-
-  const headers = keyType === 'apiKey'
-    ? {
-        'Authorization': `Bearer ${key}`,
-        'OpenAI-Beta': 'realtime=v1',
-      }
-    : {
-        'x-portkey-api-key': 'gRv2UGRMq6GGLJ8aVEB4e7adIewu',
-        'x-portkey-virtual-key': key,
-        'OpenAI-Beta': 'realtime=v1',
-      };
-
-  const ws = new WebSocket(wsUrl, { headers });
-
-  return new Promise((resolve, reject) => {
-    ws.onopen = () => {
-      console.log("WebSocket session opened.");
-
-      const sessionConfig = {
-        type: 'transcription_session.update',
-        session: {
-          input_audio_format: 'pcm16',
-          input_audio_transcription: {
-            model: 'gpt-4o-mini-transcribe',
-            prompt: config.prompt || '',
-            language: language || 'en'
-          },
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 200,
-            silence_duration_ms: 100,
-          },
-          input_audio_noise_reduction: {
-            type: 'near_field'
-          }
-        }
-      };
-      
-      ws.send(JSON.stringify(sessionConfig));
-
-      // Helper to periodically keep the websocket alive
-      const keepAlive = () => {
-        try {
-          if (ws.readyState === WebSocket.OPEN) {
-            // The ws library supports native ping frames which are ideal for heart-beats
-            ws.ping();
-          }
-        } catch (err) {
-          console.error('[OpenAI STT] keepAlive error:', err.message);
-        }
-      };
-
-      resolve({
-        sendRealtimeInput: (audioData) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            const message = {
-              type: 'input_audio_buffer.append',
-              audio: audioData
-            };
-            ws.send(JSON.stringify(message));
-          }
-        },
-        // Expose keepAlive so higher-level services can schedule heart-beats
-        keepAlive,
-        close: () => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'session.close' }));
-            ws.onmessage = ws.onerror = () => {};  // 핸들러 제거
-            ws.close(1000, 'Client initiated close.');
-          }
-        }
-      });
-    };
-
-    ws.onmessage = (event) => {
-      // ── 종료·하트비트 패킷 필터링 ──────────────────────────────
-      if (!event.data || event.data === 'null' || event.data === '[DONE]') return;
-
-      let msg;
-      try { msg = JSON.parse(event.data); }
-      catch { return; }                       // JSON 파싱 실패 무시
-
-      if (!msg || typeof msg !== 'object') return;
-
-      msg.provider = 'openai';                // ← 항상 명시
-      callbacks.onmessage?.(msg);
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error.message);
-      if (callbacks && callbacks.onerror) {
-        callbacks.onerror(error);
-      }
-      reject(error);
-    };
-
-    ws.onclose = (event) => {
-      console.log(`WebSocket closed: ${event.code} ${event.reason}`);
-      if (callbacks && callbacks.onclose) {
-        callbacks.onclose(event);
-      }
-    };
+async function createSTT({ apiKey, usePortkey = false, portkeyVirtualKey, ...config }) {
+  const { connectTranscription } = require('../realtimeTranscription');
+  if (usePortkey) {
+    throw new Error('Use a personal OpenAI key for Realtime transcription in this fork.');
+  }
+  return connectTranscription({
+    ...config,
+    url: 'wss://api.openai.com/v1/realtime?intent=transcription',
+    headers: { Authorization: `Bearer ${apiKey}` },
   });
 }
 
@@ -166,7 +61,7 @@ async function createSTT({ apiKey, language = 'en', callbacks = {}, usePortkey =
  * @returns {object} LLM instance
  */
 function createLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxTokens = 2048, usePortkey = false, portkeyVirtualKey, ...config }) {
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, timeout: 60000, maxRetries: 0 });
   
   const callApi = async (messages) => {
     if (!usePortkey) {
@@ -175,7 +70,7 @@ function createLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxTokens = 2
         messages: messages,
         temperature: temperature,
         max_tokens: maxTokens
-      });
+      }, { signal: config.signal });
       return {
         content: response.choices[0].message.content.trim(),
         raw: response
@@ -281,6 +176,7 @@ function createStreamingLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxT
 
       const response = await fetch(fetchUrl, {
         method: 'POST',
+        signal: config.signal ? AbortSignal.any([config.signal, AbortSignal.timeout(60000)]) : AbortSignal.timeout(60000),
         headers,
         body: JSON.stringify({
           model: model,
