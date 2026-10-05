@@ -22,6 +22,9 @@ export class ApiKeyHeader extends LitElement {
         backCallback: { type: Function },
         llmError: { type: String },
         sttError: { type: String },
+        endpoint: { type: String, state: true },
+        endpointModel: { type: String, state: true },
+        endpointModels: { type: Array, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -41,7 +44,8 @@ export class ApiKeyHeader extends LitElement {
         }
         .container {
             width: 100%;
-            height: 100%;
+            max-height: 100vh;
+            overflow-y: auto;
             padding: 24px 16px;
             background: rgba(0, 0, 0, 0.64);
             box-shadow: 0px 0px 0px 1.5px rgba(255, 255, 255, 0.64) inset;
@@ -51,9 +55,13 @@ export class ApiKeyHeader extends LitElement {
             align-items: flex-start;
             gap: 24px;
             display: flex;
-            -webkit-app-region: drag;
+            -webkit-app-region: no-drag;
+        }
+        .container > * {
+            flex-shrink: 0;
         }
         .header {
+            -webkit-app-region: drag;
             width: 100%;
             position: relative;
             display: flex;
@@ -128,6 +136,20 @@ export class ApiKeyHeader extends LitElement {
             display: flex;
             flex-direction: column;
             gap: 10px;
+        }
+        .endpoint-field {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .endpoint-help {
+            margin: 0;
+            color: #dcdcdc;
+            font-size: 12px;
+            line-height: 18px;
         }
         .row {
             width: 100%;
@@ -261,10 +283,7 @@ export class ApiKeyHeader extends LitElement {
         }
         .error-message,
         .success-message {
-            position: absolute;
-            bottom: 70px;
-            left: 16px;
-            right: 16px;
+            width: 100%;
             text-align: center;
             font-size: 11px;
             font-weight: 500;
@@ -410,6 +429,16 @@ export class ApiKeyHeader extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
         this.dispatchEvent(new CustomEvent('content-changed', { bubbles: true, composed: true }));
+        const container = this.shadowRoot.querySelector('.container');
+        if (container) {
+            const height = Math.min(720, Math.ceil(container.scrollHeight));
+            if (height !== this._requestedHeight) {
+                this._requestedHeight = height;
+                this.dispatchEvent(new CustomEvent('request-resize', {
+                    detail: { height }, bubbles: true, composed: true,
+                }));
+            }
+        }
     }
 
     reset() {
@@ -1937,6 +1966,7 @@ export class ApiKeyHeader extends LitElement {
             Object.keys(this.whisperInstallingModels).length > 0 ||
             (llmNeedsApiKey && !this.llmApiKey.trim()) ||
             (sttNeedsApiKey && !this.sttApiKey.trim()) ||
+            (['ionos', 'custom'].includes(this.llmProvider) && (!this.endpoint.trim() || !this.endpointModel.trim())) ||
             (llmNeedsModel && !this.selectedLlmModel?.trim()) ||
             (sttNeedsModel && !this.selectedSttModel);
 
@@ -1996,8 +2026,8 @@ export class ApiKeyHeader extends LitElement {
 
                 ${['ionos', 'custom'].includes(this.llmProvider) ? html`
                     <div class="section">
-                        <label>API base URL<input class="api-input" aria-label="API base URL" .value=${this.endpoint} @input=${e => { this.endpoint = e.target.value; }} /></label>
-                        <label>Model ID<input class="api-input" aria-label="Model ID" list="endpoint-models" .value=${this.endpointModel} @input=${e => { this.endpointModel = e.target.value; }} /></label>
+                        <label class="endpoint-field">API base URL<input class="api-input" aria-label="API base URL" .value=${this.endpoint} @input=${e => { this.endpoint = e.target.value; }} /></label>
+                        <label class="endpoint-field">Model ID<input class="api-input" aria-label="Model ID" placeholder="openai/gpt-oss-120b" list="endpoint-models" .value=${this.endpointModel} @input=${e => { this.endpointModel = e.target.value; }} /></label>
                         <datalist id="endpoint-models">${this.endpointModels.map(id => html`<option value=${id}></option>`)}</datalist>
                         <button class="provider-button" @click=${async () => {
                             const result = await window.api.providers.listModels({ provider: this.llmProvider, key: this.llmApiKey, baseURL: this.endpoint });
@@ -2005,7 +2035,7 @@ export class ApiKeyHeader extends LitElement {
                             this.llmError = result.success ? '' : result.error;
                             this.requestUpdate();
                         }}>Load available models</button>
-                        <p>Answers use this endpoint. Listening uses the separate speech provider below.</p>
+                        <p class="endpoint-help">Answers use this endpoint. Listening uses the separate speech provider below.</p>
                     </div>` : ''}
                 <!-- STT Section -->
                 <div class="section">
@@ -2092,15 +2122,15 @@ export class ApiKeyHeader extends LitElement {
                     Audio and meeting context are sent to your selected providers.
                 </div>
 
-                <div class="error-message ${this.shouldFadeMessage('error') ? 'message-fade-out' : ''}" @animationend=${this.handleMessageFadeEnd}>
+                ${this.errorMessage ? html`<div class="error-message ${this.shouldFadeMessage('error') ? 'message-fade-out' : ''}" @animationend=${this.handleMessageFadeEnd}>
                     ${this.errorMessage}
-                </div>
-                <div
+                </div>` : ''}
+                ${this.successMessage ? html`<div
                     class="success-message ${this.shouldFadeMessage('success') ? 'message-fade-out' : ''}"
                     @animationend=${this.handleMessageFadeEnd}
                 >
                     ${this.successMessage}
-                </div>
+                </div>` : ''}
             </div>
         `;
     }
