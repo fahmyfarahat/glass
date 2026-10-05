@@ -524,7 +524,7 @@ function createFeatureWindows(header, namesToCreate) {
 
             // settings
             case 'settings': {
-                const settings = new BrowserWindow({ ...commonChildOptions, width:240, maxHeight:400, parent:undefined });
+                const settings = new BrowserWindow({ ...commonChildOptions, width:340, maxHeight:600, parent:undefined });
                 settings.setContentProtection(isContentProtectionOn);
                 settings.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
                 if (process.platform === 'darwin') {

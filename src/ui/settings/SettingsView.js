@@ -1,3 +1,4 @@
+import './EndpointSettings.js';
 import { html, css, LitElement } from '../assets/lit-core-2.7.4.min.js';
 // import { getOllamaProgressTracker } from '../../features/common/services/localProgressTracker.js'; // 제거됨
 
@@ -11,7 +12,7 @@ export class SettingsView extends LitElement {
 
         :host {
             display: block;
-            width: 240px;
+            width: 340px;
             height: 100%;
             color: white;
         }
@@ -1196,6 +1197,10 @@ export class SettingsView extends LitElement {
                 ${Object.entries(this.providerConfig)
                     .filter(([id, config]) => !id.includes('-glass'))
                     .map(([id, config]) => {
+                        if (['ionos', 'custom'].includes(id)) {
+                            return html`<endpoint-settings .provider=${id} .connection=${config.connection || {}}
+                                .configured=${Boolean(this.apiKeys[id])} @provider-saved=${() => this.loadInitialData()}></endpoint-settings>`;
+                        }
                         if (id === 'ollama') {
                             // Special UI for Ollama
                             return html`
@@ -1420,8 +1425,8 @@ export class SettingsView extends LitElement {
                     <button class="settings-button full-width" @click=${this.handlePersonalize}>
                         <span>Personalize / Meeting Notes</span>
                     </button>
-                    <button class="settings-button full-width" @click=${this.handleToggleAutoUpdate} ?disabled=${this.autoUpdateLoading}>
-                        <span>Automatic Updates: ${this.autoUpdateEnabled ? 'On' : 'Off'}</span>
+                    <button class="settings-button full-width" disabled>
+                        <span>Updates: manual (custom fork)</span>
                     </button>
                     
                     <div class="move-buttons">

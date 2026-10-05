@@ -84,6 +84,12 @@ module.exports = {
     ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
     ipcMain.handle('ask:closeAskWindow',  async () => await askService.closeAskWindow());
     
+    const meetingAssist = require('../features/listen/meetingAssistService');
+    ipcMain.handle('meeting-assist:get-state', () => meetingAssist.snapshot());
+    ipcMain.handle('meeting-assist:configure', (event, options) => meetingAssist.configure(options));
+    ipcMain.handle('meeting-assist:sources', () => meetingAssist.sources());
+    ipcMain.handle('meeting-assist:suggest', () => meetingAssist.controller.suggest());
+
     // Listen
     ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent(data, mimeType));
     ipcMain.handle('listen:sendSystemAudio', async (event, { data, mimeType }) => {
@@ -106,6 +112,13 @@ module.exports = {
         console.error('[FeatureBridge] listen:changeSession failed', error.message);
         return { success: false, error: error.message };
       }
+    });
+
+    // Configurable providers never return their stored secret to the renderer.
+    ipcMain.handle('model:configure-provider', (event, { provider, ...options }) => modelStateService.configureProvider(provider, options));
+    ipcMain.handle('model:list-provider-models', async (event, { provider, ...options }) => {
+      try { return { success: true, models: await modelStateService.listProviderModels(provider, options) }; }
+      catch (error) { return { success: false, error: error.message }; }
     });
 
     // ModelStateService

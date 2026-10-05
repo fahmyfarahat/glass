@@ -150,6 +150,7 @@ class SttService {
     }
 
     async initializeSttSessions(language = 'en') {
+        const lifecycle = this.lifecycle || 0;
         const effectiveLanguage = process.env.OPENAI_TRANSCRIBE_LANG || language || 'en';
 
         const modelInfo = await modelStateService.getCurrentModelInfo('stt');
@@ -456,6 +457,7 @@ class SttService {
         
         const sttOptions = {
             apiKey: this.modelInfo.apiKey,
+            model: this.modelInfo.model,
             language: effectiveLanguage,
             usePortkey: this.modelInfo.provider === 'openai-glass',
             portkeyVirtualKey: this.modelInfo.provider === 'openai-glass' ? this.modelInfo.apiKey : undefined,
@@ -465,10 +467,17 @@ class SttService {
         const myOptions = { ...sttOptions, callbacks: mySttConfig.callbacks, sessionType: 'my' };
         const theirOptions = { ...sttOptions, callbacks: theirSttConfig.callbacks, sessionType: 'their' };
 
-        [this.mySttSession, this.theirSttSession] = await Promise.all([
+        const sessions = await Promise.allSettled([
             createSTT(this.modelInfo.provider, myOptions),
             createSTT(this.modelInfo.provider, theirOptions),
         ]);
+        const failure = sessions.find(result => result.status === 'rejected') ||
+            (lifecycle !== (this.lifecycle || 0) ? { reason: new Error('Listening was stopped during connection setup.') } : null);
+        if (failure) {
+            await Promise.all(sessions.filter(result => result.status === 'fulfilled').map(result => result.value.close()));
+            throw failure.reason;
+        }
+        [this.mySttSession, this.theirSttSession] = sessions.map(result => result.value);
 
         console.log('✅ Both STT sessions initialized successfully.');
 
@@ -744,6 +753,7 @@ class SttService {
     }
 
     async closeSessions() {
+        this.lifecycle = (this.lifecycle || 0) + 1;
         this.stopMacOSAudioCapture();
 
         // Clear heartbeat / renewal timers

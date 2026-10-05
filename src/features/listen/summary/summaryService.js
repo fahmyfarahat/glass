@@ -138,6 +138,7 @@ Keep all points concise and build upon previous analysis if provided.`,
             console.log('🤖 Sending analysis request to AI...');
 
             const llm = createLLM(modelInfo.provider, {
+                ...modelInfo,
                 apiKey: modelInfo.apiKey,
                 model: modelInfo.model,
                 temperature: 0.7,

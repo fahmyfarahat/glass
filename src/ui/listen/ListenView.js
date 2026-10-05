@@ -1,3 +1,4 @@
+import './MeetingAssistView.js';
 import { html, css, LitElement } from '../assets/lit-core-2.7.4.min.js';
 import './stt/SttView.js';
 import './summary/SummaryView.js';
@@ -122,7 +123,8 @@ export class ListenView extends LitElement {
             box-sizing: border-box;
             position: relative;
             background: rgba(0, 0, 0, 0.6);
-            overflow: hidden;
+            overflow-y: auto;
+            max-height: 700px;
             border-radius: 12px;
             width: 100%;
             height: 100%;
@@ -528,7 +530,8 @@ export class ListenView extends LitElement {
 
                 const contentHeight = activeContent.scrollHeight;
 
-                const idealHeight = topBarHeight + contentHeight;
+                const assistHeight = this.shadowRoot.querySelector('meeting-assist-view')?.offsetHeight || 0;
+                const idealHeight = topBarHeight + contentHeight + assistHeight;
 
                 const targetHeight = Math.min(700, idealHeight);
 
@@ -673,6 +676,7 @@ export class ListenView extends LitElement {
                     </div>
                 </div>
 
+                <meeting-assist-view @assist-resized=${this.adjustWindowHeight}></meeting-assist-view>
                 <stt-view 
                     .isVisible=${this.viewMode === 'transcript'}
                     @stt-messages-updated=${this.handleSttMessagesUpdated}

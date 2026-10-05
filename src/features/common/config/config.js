@@ -91,7 +91,7 @@ class Config {
     }
     
     getUserConfigPath() {
-        const configDir = path.join(os.homedir(), '.pickleglass');
+        const configDir = process.env.GLASS_USER_DATA || require('electron').app.getPath('userData');
         if (!fs.existsSync(configDir)) {
             fs.mkdirSync(configDir, { recursive: true });
         }

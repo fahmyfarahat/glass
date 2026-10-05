@@ -250,6 +250,7 @@ class AskService {
             console.log(`[AskService] Using model: ${modelInfo.model} for provider: ${modelInfo.provider}`);
 
             const screenshotResult = await captureScreenshot({ quality: 'medium' });
+            signal.throwIfAborted();
             const screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
@@ -266,7 +267,11 @@ class AskService {
                 },
             ];
 
-            if (screenshotBase64) {
+            if (screenshotBase64 && ['ionos', 'custom'].includes(modelInfo.provider) && !modelInfo.supportsVision) {
+                const openai = await require('../common/repositories/providerSettings').getByProvider('openai');
+                const description = await require('../common/ai/screenContext').describeScreen(screenshotBase64, openai?.api_key, signal);
+                messages[1].content = `User Request: ${userPrompt.trim()}\nScreen description from OpenAI:\n${description}`;
+            } else if (screenshotBase64) {
                 messages[1].content.push({
                     type: 'image_url',
                     image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
@@ -274,6 +279,7 @@ class AskService {
             }
             
             const streamingLLM = createStreamingLLM(modelInfo.provider, {
+                ...modelInfo, signal,
                 apiKey: modelInfo.apiKey,
                 model: modelInfo.model,
                 temperature: 0.7,
@@ -339,6 +345,7 @@ class AskService {
             }
 
         } catch (error) {
+            if (signal.aborted) return { success: false, cancelled: true };
             console.error('[AskService] Error during message processing:', error);
             this.state = {
                 ...this.state,
@@ -368,38 +375,17 @@ class AskService {
      * @private
      */
     async _processStream(reader, askWin, sessionId, signal) {
-        const decoder = new TextDecoder();
         let fullResponse = '';
 
         try {
+            signal.throwIfAborted();
             this.state.isLoading = false;
             this.state.isStreaming = true;
             this._broadcastState();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.substring(6);
-                        if (data === '[DONE]') {
-                            return; 
-                        }
-                        try {
-                            const json = JSON.parse(data);
-                            const token = json.choices[0]?.delta?.content || '';
-                            if (token) {
-                                fullResponse += token;
-                                this.state.currentResponse = fullResponse;
-                                this._broadcastState();
-                            }
-                        } catch (error) {
-                        }
-                    }
-                }
+            for await (const token of require('../common/ai/sse').streamText(reader, signal)) {
+                fullResponse += token;
+                this.state.currentResponse = fullResponse;
+                this._broadcastState();
             }
         } catch (streamError) {
             if (signal.aborted) {
@@ -411,6 +397,7 @@ class AskService {
                 }
             }
         } finally {
+            if (signal.aborted) return;
             this.state.isStreaming = false;
             this.state.currentResponse = fullResponse;
             this._broadcastState();

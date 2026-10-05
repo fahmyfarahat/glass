@@ -1,134 +1,58 @@
-<p align="center">
-  <a href="https://pickle.com/glass">
-   <img src="./public/assets/banner.gif" alt="Logo">
-  </a>
+# Glass Meeting Assistant
 
-  <h1 align="center">Glass by Pickle: Digital Mind Extension 🧠</h1>
+A personal fork of [pickle-com/glass](https://github.com/pickle-com/glass), maintained at [fahmyfarahat/glass](https://github.com/fahmyfarahat/glass). Adds live answer suggestions and OpenAI / IONOS AI Model Hub / custom OpenAI-compatible API support. Original project history and credits are in [the upstream README](docs/UPSTREAM_README.md).
 
-</p>
+## Using it with Google Meet
 
+Glass runs beside your meeting on your computer. It receives microphone and system audio; it does not join Meet as a bot. System audio can include other applications, so close unrelated audio sources. Headphones help separate your voice from other participants.
 
-<p align="center">
-  <a href="https://discord.gg/UCZH5B5Hpd"><img src="./public/assets/button_dc.png" width="80" alt="Pickle Discord"></a>&ensp;<a href="https://pickle.com"><img src="./public/assets/button_we.png" width="105" alt="Pickle Website"></a>&ensp;<a href="https://x.com/intent/user?screen_name=leinadpark"><img src="./public/assets/button_xe.png" width="109" alt="Follow Daniel"></a>
-</p>
+1. Launch **Glass Meeting Assistant** and choose **Enter Your API Key**.
+2. Choose an answer provider. For **IONOS**, enter your token and API base URL, then use **Load available models** and select or type the exact model ID. The default base URL is `https://openai.inference.de-txl.ionos.com/v1`. Custom endpoints use the same setup. Confirming tests the connection with a small completion request.
+3. Choose **OpenAI** as the speech provider and enter your OpenAI key. OpenAI also works as the answer provider. Existing local Whisper support remains available separately.
+4. Grant the microphone and screen/system-audio permissions requested by macOS. Restart the app after changing Screen Recording permission if needed.
+5. Join your Google Meet in your browser, click **Listen**, then enable **Suggest answers automatically** in the Listen panel. Suggestions appear after the other speaker finishes a question or request. **Suggest now** gives a manual response.
+6. For screen context, open **Options**, click **Choose / refresh windows**, select the Meet window or a display, then enable **Include the selected screen**. You can add a short meeting background there too.
+7. Click **Stop** to end capture and cancel pending meeting suggestions.
 
-> This project is a fork of [CheatingDaddy](https://github.com/sohzm/cheating-daddy) with modifications and enhancements. Thanks to [Soham](https://x.com/soham_btw) and all the open-source contributors who made this possible!
+For later provider changes, open the desktop app's Settings. IONOS and custom connection cards offer **Load models**, **Save and test**, and **Remove key**. Answer and speech models are selected independently. IONOS tokens can expire; replace the token when authentication fails.
 
-🤖 **Fast, light & open-source**—Glass lives on your desktop, sees what you see, listens in real time, understands your context, and turns every moment into structured knowledge.
+## What goes to each provider
 
-💬 **Proactive in meetings**—it surfaces action items, summaries, and answers the instant you need them.
+- Microphone and system audio go to the selected speech provider while Listen is running.
+- Recent transcript and meeting background go to the selected answer provider. Automatic suggestions are off by default and operate only inside a user-started Listen session.
+- Screen context starts off and must be selected again after restarting. A local frame is refreshed every four seconds and kept in memory. A frame is sent only when generating a suggestion.
+- OpenAI answer models can receive that frame directly. For a text-only IONOS/custom model, a saved OpenAI key is used with `gpt-4.1` to describe the frame, then the text description goes to the answer model. Enable **This model accepts images** only when your configured endpoint supports image input.
+- The existing **Ask** feature captures the desktop on demand. Text-only IONOS/custom models also use the OpenAI screen-description step there.
+- Credentials are encrypted with the OS credential facility before local storage. Transcripts and session history retain Glass's local storage behavior. Automatic upstream app updates are disabled so they cannot replace this fork.
 
-🫥️ **Truly invisible**—never shows up in screen recordings, screenshots, or your dock; no always-on capture or hidden sharing.
+The app uses the documented [IONOS OpenAI-compatible API](https://docs.ionos.com/cloud/ai/ai-model-hub/how-tos/tool-integration) for Chat Completions, and the [OpenAI GA Realtime transcription protocol](https://developers.openai.com/api/reference/resources/realtime/client-events) with `gpt-4o-mini-transcribe` for listening. It does not assume IONOS provides Realtime transcription. This fork's setup uses personal API keys; the upstream Glass-hosted speech service is not supported.
 
-To have fun building with us, join our [Discord](https://discord.gg/UCZH5B5Hpd)!
+## Build from source
 
-## Instant Launch
+Use Node.js 20 and npm. macOS Apple Silicon is the packaging target tested for this change.
 
-⚡️  Skip the setup—launch instantly with our ready-to-run macOS app.  [[Download Here]](https://www.dropbox.com/scl/fi/znid09apxiwtwvxer6oc9/Glass_latest.dmg?rlkey=gwvvyb3bizkl25frhs4k1zwds&st=37q31b4w&dl=1)
-
-## Quick Start (Local Build)
-
-### Prerequisites
-
-First download & install [Python](https://www.python.org/downloads/) and [Node](https://nodejs.org/en/download).
-If you are using Windows, you need to also install [Build Tools for Visual Studio](https://visualstudio.microsoft.com/downloads/)
-
-Ensure you're using Node.js version 20.x.x to avoid build errors with native dependencies.
-
-```bash
-# Check your Node.js version
-node --version
-
-# If you need to install Node.js 20.x.x, we recommend using nvm:
-# curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-# nvm install 20
-# nvm use 20
+```sh
+npm ci
+npm --prefix pickleglass_web ci
+npm test
+npm run build:all
+npm start
 ```
 
-### Installation
+For a local macOS app and ZIP:
 
-```bash
-npm run setup
+```sh
+npm run build:mac:local
 ```
 
-## Highlights
+Artifacts appear in `dist/`. The local build uses an ad-hoc signature and is not Apple-notarized. It has its own application identity and data directory, **Glass Meeting Assistant**. Development runs can set `GLASS_USER_DATA` to use an isolated data directory.
 
+## Validation
 
-### Ask: get answers based on all your previous screen actions & audio
+`npm test` runs offline tests against local mock HTTP/WebSocket servers and injected capture/provider adapters. They cover endpoint routing, exact model IDs, separate speech selection, key reuse boundaries, fragmented UTF-8/SSE, authentication failures, Realtime acknowledgements/timeouts, suggestion timing/cancellation, and screen-data routing. Renderer and Next.js production builds are checked separately.
 
-<img width="100%" alt="booking-screen" src="./public/assets/00.gif">
+Paid-provider calls and a real Google Meet session require your credentials and OS permissions; mock tests do not verify latency, transcription quality, or live account/model availability.
 
-### Meetings: real-time meeting notes, live summaries, session records
+## License
 
-<img width="100%" alt="booking-screen" src="./public/assets/01.gif">
-
-### Use your own API key, or sign up to use ours (free)
-
-<img width="100%" alt="booking-screen" src="./public/assets/02.gif">
-
-**Currently Supporting:**
-- OpenAI API: Get OpenAI API Key [here](https://platform.openai.com/api-keys)
-- Gemini API: Get Gemini API Key [here](https://aistudio.google.com/apikey)
-- Local LLM Ollama & Whisper
-
-### Liquid Glass Design (coming soon)
-
-<img width="100%" alt="booking-screen" src="./public/assets/03.gif">
-
-<p>
-  for a more detailed guide, please refer to this <a href="https://www.youtube.com/watch?v=qHg3_4bU1Dw">video.</a>
-  <i style="color:gray; font-weight:300;">
-    we don't waste money on fancy vids; we just code.
-  </i>
-</p>
-
-
-## Keyboard Shortcuts
-
-`Ctrl/Cmd + \` : show and hide main window
-
-`Ctrl/Cmd + Enter` : ask AI using all your previous screen and audio
-
-`Ctrl/Cmd + Arrows` : move main window position
-
-## Repo Activity
-
-![Alt](https://repobeats.axiom.co/api/embed/a23e342faafa84fa8797fa57762885d82fac1180.svg "Repobeats analytics image")
-
-## Contributing
-
-We love contributions! Feel free to open issues for bugs or feature requests. For detailed guide, please see our [contributing guide](/CONTRIBUTING.md).
-> Currently, we're working on a full code refactor and modularization. Once that's completed, we'll jump into addressing the major issues.
-
-### Contributors
-
-<a href="https://github.com/pickle-com/glass/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=pickle-com/glass" />
-</a>
-
-### Help Wanted Issues
-
-We have a list of [help wanted](https://github.com/pickle-com/glass/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22%F0%9F%99%8B%E2%80%8D%E2%99%82%EF%B8%8Fhelp%20wanted%22) that contain small features and bugs which have a relatively limited scope. This is a great place to get started, gain experience, and get familiar with our contribution process.
-
-
-### 🛠 Current Issues & Improvements
-
-| Status | Issue                          | Description                                       |
-|--------|--------------------------------|---------------------------------------------------|
-| 🚧 WIP      | Liquid Glass                    | Liquid Glass UI for MacOS 26 |
-
-### Changelog
-
-- Jul 5: Now support Gemini, Intel Mac supported
-- Jul 6: Full code refactoring has done.
-- Jul 7: Now support Claude, LLM/STT model selection
-- Jul 8: Now support Windows(beta), Improved AEC by Rust(to seperate mic/system audio), shortcut editing(beta)
-- Jul 8: Now support Local LLM & STT, Firebase Data Storage 
-
-
-## About Pickle
-
-**Our mission is to build a living digital clone for everyone.** Glass is part of Step 1—a trusted pipeline that transforms your daily data into a scalable clone. Visit [pickle.com](https://pickle.com) to learn more.
-
-## Star History
-[![Star History Chart](https://api.star-history.com/svg?repos=pickle-com/glass&type=Date)](https://www.star-history.com/#pickle-com/glass&Date)
+GPL-3.0, inherited from Glass. See [LICENSE](LICENSE).

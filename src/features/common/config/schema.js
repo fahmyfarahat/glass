@@ -93,6 +93,7 @@ const LATEST_SCHEMA = {
         columns: [
             { name: 'provider', type: 'TEXT NOT NULL' },
             { name: 'api_key', type: 'TEXT' },
+            { name: 'connection_options', type: 'TEXT' },
             { name: 'selected_llm_model', type: 'TEXT' },
             { name: 'selected_stt_model', type: 'TEXT' },
             { name: 'is_active_llm', type: 'INTEGER DEFAULT 0' },

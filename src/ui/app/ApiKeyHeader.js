@@ -142,6 +142,7 @@ export class ApiKeyHeader extends LitElement {
         }
         .provider-selector {
             display: flex;
+            flex-wrap: wrap;
             width: 240px;
             overflow: hidden;
             border-radius: 12px;
@@ -335,6 +336,9 @@ export class ApiKeyHeader extends LitElement {
         this.sttApiKey = '';
         this.llmProvider = 'openai';
         this.sttProvider = 'openai';
+        this.endpoint = '';
+        this.endpointModel = '';
+        this.endpointModels = [];
         this.providers = { llm: [], stt: [] }; // 초기화
         // Ollama related
         this.modelSuggestions = [];
@@ -560,6 +564,10 @@ export class ApiKeyHeader extends LitElement {
     }
 
     async handleLlmProviderChange(e, providerId) {
+        this.endpoint = providerId === 'ionos' ? 'https://openai.inference.de-txl.ionos.com/v1' : '';
+        this.endpointModel = '';
+        this.endpointModels = [];
+
         const newProvider = providerId || e.target.value;
         if (newProvider === this.llmProvider) return;
 
@@ -1528,10 +1536,9 @@ export class ApiKeyHeader extends LitElement {
                     throw new Error('Please enter LLM API key');
                 }
 
-                llmResult = await window.api.apiKeyHeader.validateKey({
-                    provider: this.llmProvider,
-                    key: this.llmApiKey.trim(),
-                });
+                llmResult = ['ionos', 'custom'].includes(this.llmProvider)
+                    ? await window.api.providers.configure({ provider: this.llmProvider, key: this.llmApiKey.trim(), baseURL: this.endpoint, model: this.endpointModel })
+                    : await window.api.apiKeyHeader.validateKey({ provider: this.llmProvider, key: this.llmApiKey.trim() });
 
                 if (llmResult.success) {
                     const config = await window.api.apiKeyHeader.getProviderConfig();
@@ -1987,6 +1994,19 @@ export class ApiKeyHeader extends LitElement {
                     </div>
                 </div>
 
+                ${['ionos', 'custom'].includes(this.llmProvider) ? html`
+                    <div class="section">
+                        <label>API base URL<input class="api-input" aria-label="API base URL" .value=${this.endpoint} @input=${e => { this.endpoint = e.target.value; }} /></label>
+                        <label>Model ID<input class="api-input" aria-label="Model ID" list="endpoint-models" .value=${this.endpointModel} @input=${e => { this.endpointModel = e.target.value; }} /></label>
+                        <datalist id="endpoint-models">${this.endpointModels.map(id => html`<option value=${id}></option>`)}</datalist>
+                        <button class="provider-button" @click=${async () => {
+                            const result = await window.api.providers.listModels({ provider: this.llmProvider, key: this.llmApiKey, baseURL: this.endpoint });
+                            this.endpointModels = result.models || [];
+                            this.llmError = result.success ? '' : result.error;
+                            this.requestUpdate();
+                        }}>Load available models</button>
+                        <p>Answers use this endpoint. Listening uses the separate speech provider below.</p>
+                    </div>` : ''}
                 <!-- STT Section -->
                 <div class="section">
                     <div class="row">
@@ -2069,8 +2089,7 @@ export class ApiKeyHeader extends LitElement {
                 <div class="footer">
                     Get your API key from: OpenAI | Google | Anthropic
                     <br />
-                    Glass does not collect your personal data —
-                    <span class="footer-link" @click=${this.openPrivacyPolicy}>See details</span>
+                    Audio and meeting context are sent to your selected providers.
                 </div>
 
                 <div class="error-message ${this.shouldFadeMessage('error') ? 'message-fade-out' : ''}" @animationend=${this.handleMessageFadeEnd}>
