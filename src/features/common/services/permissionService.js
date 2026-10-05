@@ -71,22 +71,25 @@ class PermissionService {
     if (process.platform !== 'darwin') {
       return { success: false, error: 'Not supported on this platform' };
     }
+    if (section !== 'screen-recording') {
+      return { success: false, error: 'Unsupported privacy settings section' };
+    }
 
     try {
-      if (section === 'screen-recording') {
-        try {
-          console.log('[Permissions] Triggering screen capture request to register app...');
-          await desktopCapturer.getSources({
-            types: ['screen'],
-            thumbnailSize: { width: 1, height: 1 }
-          });
-          console.log('[Permissions] App registered for screen recording');
-        } catch (captureError) {
-          console.log('[Permissions] Screen capture request triggered (expected to fail):', captureError.message);
-        }
-        
-        // await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+      // Register the app if needed, but do not wait for capture authorization:
+      // a denied or pending request must not prevent opening Settings.
+      try {
+        const captureRequest = desktopCapturer.getSources({
+          types: ['screen'],
+          thumbnailSize: { width: 1, height: 1 }
+        });
+        Promise.resolve(captureRequest).catch(error => {
+          console.log('[Permissions] Screen capture registration:', error.message);
+        });
+      } catch (error) {
+        console.log('[Permissions] Screen capture registration:', error.message);
       }
+      await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
       return { success: true };
     } catch (error) {
       console.error('[Permissions] Error opening system preferences:', error);
@@ -121,4 +124,4 @@ class PermissionService {
 }
 
 const permissionService = new PermissionService();
-module.exports = permissionService; 
+module.exports = permissionService;
