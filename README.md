@@ -45,7 +45,7 @@ For a local macOS app and ZIP:
 npm run build:mac:local
 ```
 
-Artifacts appear in `dist/`. The local build uses an ad-hoc signature and is not Apple-notarized. It has its own application identity and data directory, **Glass Meeting Assistant**. Development runs can set `GLASS_USER_DATA` to use an isolated data directory.
+Artifacts appear in `dist/`. The build checks the packaged backend with a local HTTP request and verifies the desktop/web assets before creating the ZIP. The local build uses an ad-hoc signature and is not Apple-notarized. It has its own application identity and data directory, **Glass Meeting Assistant**. Development runs can set `GLASS_USER_DATA` to use an isolated data directory.
 
 ## Validation
 

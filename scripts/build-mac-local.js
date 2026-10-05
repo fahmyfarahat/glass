@@ -11,6 +11,10 @@ run(path.join(root, 'node_modules/.bin/electron-builder'), [
 const app = path.join(root, 'dist/mac-arm64/Glass Meeting Assistant.app');
 run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--entitlements', 'entitlements.plist', app]);
 run('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]);
+run(path.join(app, 'Contents/MacOS/Glass Meeting Assistant'), [
+    path.join(root, 'tests/packaged-app.cjs'),
+    path.join(app, 'Contents/Resources'),
+], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
 const archive = path.join(root, 'dist/Glass-Meeting-Assistant-mac-arm64.zip');
 if (fs.existsSync(archive)) fs.unlinkSync(archive);
 run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, archive]);

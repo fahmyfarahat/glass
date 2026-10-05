@@ -23,7 +23,7 @@ protocols:
 files:
     - src/**/*
     - package.json
-    - glass-meeting_web/backend_node/**/*
+    - pickleglass_web/backend_node/**/*
     - '!**/node_modules/electron/**'
     - public/build/**/*
 
