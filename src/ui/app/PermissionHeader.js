@@ -268,6 +268,8 @@ export class PermissionHeader extends LitElement {
         isChecking: { type: String },
         continueCallback: { type: Function },
         userMode: { type: String }, // 'local' or 'firebase'
+        screenError: { type: String },
+        openingScreenSettings: { type: Boolean },
     };
 
     constructor() {
@@ -278,12 +280,18 @@ export class PermissionHeader extends LitElement {
         this.isChecking = false;
         this.continueCallback = null;
         this.userMode = 'local'; // Default to local
+        this.screenError = '';
+        this.openingScreenSettings = false;
+    }
+
+    get containerHeight() {
+        return (this.userMode === 'firebase' ? 280 : 220) + (this.screenError ? 64 : 0);
     }
 
     updated(changedProperties) {
         super.updated(changedProperties);
-        if (changedProperties.has('userMode')) {
-            const newHeight = this.userMode === 'firebase' ? 280 : 220;
+        if (changedProperties.has('userMode') || changedProperties.has('screenError')) {
+            const newHeight = this.containerHeight;
             console.log(`[PermissionHeader] User mode changed to ${this.userMode}, requesting resize to ${newHeight}px`);
             this.dispatchEvent(new CustomEvent('request-resize', {
                 detail: { height: newHeight },
@@ -403,7 +411,9 @@ export class PermissionHeader extends LitElement {
     }
 
     async handleScreenClick() {
-        if (!window.api || this.screenGranted === 'granted') return;
+        if (!window.api || this.screenGranted === 'granted' || this.openingScreenSettings) return;
+        this.screenError = '';
+        this.openingScreenSettings = true;
         
         console.log('[PermissionHeader] Checking screen recording permission...');
         
@@ -416,16 +426,14 @@ export class PermissionHeader extends LitElement {
                 this.requestUpdate();
                 return;
             }
-            if (permissions.screen === 'not-determined' || permissions.screen === 'denied' || permissions.screen === 'unknown' || permissions.screen === 'restricted') {
             console.log('[PermissionHeader] Opening screen recording preferences...');
-            await window.api.permissionHeader.openSystemPreferences('screen-recording');
-            }
-            
-            // Check permissions again after a delay
-            // (This may not execute if app restarts after permission grant)
-            // setTimeout(() => this.checkPermissions(), 2000);
+            const result = await window.api.permissionHeader.openSystemPreferences('screen-recording');
+            if (!result?.success) throw new Error(result?.error || 'System Settings could not be opened.');
         } catch (error) {
             console.error('[PermissionHeader] Error opening screen recording preferences:', error);
+            this.screenError = 'Open System Settings → Privacy & Security → Screen & System Audio Recording, then enable Glass Meeting Assistant.';
+        } finally {
+            this.openingScreenSettings = false;
         }
     }
 
@@ -478,7 +486,7 @@ export class PermissionHeader extends LitElement {
 
     render() {
         const isKeychainRequired = this.userMode === 'firebase';
-        const containerHeight = isKeychainRequired ? 280 : 220;
+        const containerHeight = this.containerHeight;
         const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
         const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
 
@@ -552,10 +560,11 @@ export class PermissionHeader extends LitElement {
                         <button 
                             class="action-button" 
                             @click=${this.handleScreenClick}
-                            ?disabled=${this.screenGranted === 'granted'}
+                            ?disabled=${this.screenGranted === 'granted' || this.openingScreenSettings}
                         >
-                            ${this.screenGranted === 'granted' ? 'Screen Recording Granted' : 'Grant Screen Recording Access'}
+                            ${this.screenGranted === 'granted' ? 'Screen Recording Granted' : this.openingScreenSettings ? 'Opening Settings…' : 'Open Screen Recording Settings'}
                         </button>
+                        ${this.screenError ? html`<div class="subtitle" role="alert">${this.screenError}</div>` : ''}
 
                         ${isKeychainRequired ? html`
                             <button 
@@ -583,4 +592,4 @@ export class PermissionHeader extends LitElement {
     }
 }
 
-customElements.define('permission-setup', PermissionHeader); 
+customElements.define('permission-setup', PermissionHeader);
