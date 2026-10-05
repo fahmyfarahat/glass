@@ -100,9 +100,11 @@ class WindowLayoutManager {
         const centerX = currentBounds.x + currentBounds.width / 2;
         const newX = Math.round(centerX - width / 2);
         const display = getCurrentDisplay(header);
-        const { x: workAreaX, width: workAreaWidth } = display.workArea;
+        const { x: workAreaX, y: workAreaY, width: workAreaWidth, height: workAreaHeight } = display.workArea;
+        height = Math.min(height, workAreaHeight);
         const clampedX = Math.max(workAreaX, Math.min(workAreaX + workAreaWidth - width, newX));
-        return { x: clampedX, y: currentBounds.y, width, height };
+        const clampedY = Math.max(workAreaY, Math.min(currentBounds.y, workAreaY + workAreaHeight - height));
+        return { x: clampedX, y: clampedY, width, height };
     }
     
     calculateClampedPosition(header, { x: newX, y: newY }) {
